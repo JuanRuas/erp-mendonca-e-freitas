@@ -94,9 +94,13 @@ namespace ERPAdvocacia
                        P.valor_causa, P.cliente_id
                        FROM PROCESSO P
                        INNER JOIN CLIENTE C ON P.cliente_id = C.id_cliente
+                       WHERE P.numero_cnj LIKE @pesquisa
+                       OR C.nome_razao_social LIKE @pesquisa
+                       OR P.vara LIKE @pesquisa
+                       OR P.comarca LIKE @pesquisa
+                       OR P.status LIKE @pesquisa
                        ORDER BY P.id_processo DESC";
-
-                dgvProcessos.DataSource = db.ExecutarSelect(sql);
+                dgvProcessos.DataSource = db.ExecutarSelect(sql, txtPesquisar.Text.Trim());
 
                 dgvProcessos.Columns["id_processo"].HeaderText = "ID";
                 dgvProcessos.Columns["numero_cnj"].HeaderText = "Número CNJ";
@@ -105,6 +109,8 @@ namespace ERPAdvocacia
                 dgvProcessos.Columns["valor_causa"].HeaderText = "Valor da Causa";
 
                 dgvProcessos.Columns["cliente_id"].Visible = false;
+                
+                
                 dgvProcessos.ClearSelection();
             }
             catch (Exception ex)
@@ -338,6 +344,15 @@ namespace ERPAdvocacia
             {
                 MessageBox.Show("Erro ao iniciar processo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void txtPesquisar_TextChanged(object sender, EventArgs e)
+        {
+            idProcessoSelecionado = 0;
+            btnAlterar.Enabled = false;
+            btnIniciar.Enabled = false;
+            btnVincularAdvogados.Enabled = false;
+            CarregarDados();
         }
     }
 }
