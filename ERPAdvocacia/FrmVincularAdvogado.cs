@@ -1,4 +1,5 @@
 ﻿using ERPAdvocacia.Data;
+using ERPAdvocacia.UI;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
@@ -45,7 +46,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar advogados: " + ex.Message);
+                Mensagens.Erro("carregar advogados", ex);
             }
         }
         private void CarregarAdvogadosVinculados()
@@ -71,7 +72,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar advogados vinculados: " + ex.Message);
+                Mensagens.Erro("carregar advogados vinculados", ex);
             }
         }
 
@@ -106,6 +107,10 @@ namespace ERPAdvocacia
                     cmd.ExecuteNonQuery();
                 }
 
+                Auditoria.Registrar("VINCULAR_ADVOGADO", "PROCESSO", idProcesso,
+                    "Advogado " + cmbAdvogado.Text + " vinculado ao processo " + numeroProcesso);
+                Historico.Registrar(idProcesso, "Advogado vinculado ao processo: " + cmbAdvogado.Text + ".");
+
                 MessageBox.Show("Advogado vinculado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 cmbAdvogado.SelectedIndex = -1;
@@ -115,13 +120,23 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao vincular advogado: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("vincular advogado", ex);
             }
         }
 
         private void FrmVincularAdvogado_Load(object sender, EventArgs e)
         {
             lblNumeroProcesso.Text = numeroProcesso;
+
+
+            CancelButton = btnFechar;
+
+
+            bool podeVincular = Permissoes.Pode(Acao.VincularAdvogado);
+            cmbAdvogado.Enabled = podeVincular;
+            chkPrincipal.Enabled = podeVincular;
+            btnVincular.Enabled = podeVincular;
+
             CarregarAdvogados();
             CarregarAdvogadosVinculados();
         }

@@ -229,6 +229,7 @@
             txtPesquisar.Name = "txtPesquisar";
             txtPesquisar.Size = new Size(323, 27);
             txtPesquisar.TabIndex = 18;
+            txtPesquisar.TextChanged += txtPesquisar_TextChanged;
             // 
             // dgvPrazos
             // 

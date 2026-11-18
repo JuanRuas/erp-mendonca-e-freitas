@@ -1,4 +1,5 @@
-﻿using ERPAdvocacia.Data;
+using ERPAdvocacia.Data;
+using ERPAdvocacia.UI;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
@@ -38,7 +39,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar processos: " + ex.Message);
+                Mensagens.Erro("carregar processos", ex);
             }
         }
         private void CarregarResponsaveis()
@@ -61,7 +62,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar responsáveis: " + ex.Message);
+                Mensagens.Erro("carregar responsáveis", ex);
             }
         }
         private void CarregarDados()
@@ -77,9 +78,12 @@ namespace ERPAdvocacia
                        FROM PRAZO_PROCESSUAL PR
                        INNER JOIN PROCESSO P ON PR.processo_id = P.id_processo
                        INNER JOIN USUARIO U ON PR.responsavel_id = U.id_usuario
+                       WHERE PR.titulo LIKE @pesquisa
+                       OR P.numero_cnj LIKE @pesquisa
+                       OR U.nome LIKE @pesquisa
                        ORDER BY PR.data_vencimento";
 
-                dgvPrazos.DataSource = db.ExecutarSelect(sql);
+                dgvPrazos.DataSource = db.ExecutarSelect(sql, txtPesquisar.Text.Trim());
 
                 dgvPrazos.Columns["id_prazo"].Visible = false;
                 dgvPrazos.Columns["processo_id"].Visible = false;
@@ -93,11 +97,14 @@ namespace ERPAdvocacia
                 dgvPrazos.Columns["status"].HeaderText = "Status";
                 dgvPrazos.Columns["data_cumprimento"].HeaderText = "Cumprimento";
 
+                GridHelper.FormatarColuna(dgvPrazos, "data_vencimento", "dd/MM/yyyy HH:mm");
+                GridHelper.FormatarColuna(dgvPrazos, "data_cumprimento", "dd/MM/yyyy HH:mm");
+
                 dgvPrazos.ClearSelection();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar prazos: " + ex.Message);
+                Mensagens.Erro("carregar prazos", ex);
             }
         }
         private void LimparCampos()
@@ -113,7 +120,7 @@ namespace ERPAdvocacia
 
             dgvPrazos.ClearSelection();
 
-            btnSalvar.Enabled = true;
+            btnSalvar.Enabled = Permissoes.Pode(Acao.CadastrarPrazo);
             btnAlterar.Enabled = false;
             btnCumprir.Enabled = false;
 
@@ -152,6 +159,12 @@ namespace ERPAdvocacia
 
         private void FrmPrazos_Load(object sender, EventArgs e)
         {
+
+            GridHelper.PintarPrazos(dgvPrazos);
+
+            txtTitulo.PlaceholderText = "Ex.: Contestação, Recurso, Audiência";
+            txtDescricao.PlaceholderText = "Detalhes do prazo (opcional)";
+
             CarregarProcessos();
             CarregarResponsaveis();
             CarregarDados();
@@ -161,6 +174,14 @@ namespace ERPAdvocacia
         private void btnNovo_Click(object sender, EventArgs e)
         {
             LimparCampos();
+        }
+
+        private void txtPesquisar_TextChanged(object sender, EventArgs e)
+        {
+            LimparCampos();
+            txtPesquisar.Focus();
+            dgvPrazos.DataSource = null;
+            CarregarDados();
         }
 
         private void btnSalvar_Click(object sender, EventArgs e)
@@ -193,6 +214,9 @@ namespace ERPAdvocacia
                     cmd.Parameters.AddWithValue("@status", "pendente");
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("CADASTRAR", "PRAZO_PROCESSUAL", (int)cmd.LastInsertedId,
+                        "Prazo cadastrado: " + txtTitulo.Text.Trim());
                 }
 
                 MessageBox.Show("Prazo cadastrado com sucesso!", "Cadastro", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -202,7 +226,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao cadastrar prazo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("cadastrar prazo", ex);
             }
         }
 
@@ -226,8 +250,8 @@ namespace ERPAdvocacia
             txtStatus.Text = linha.Cells["status"].Value.ToString();
 
             btnSalvar.Enabled = false;
-            btnAlterar.Enabled = txtStatus.Text == "pendente";
-            btnCumprir.Enabled = txtStatus.Text == "pendente";
+            btnAlterar.Enabled = txtStatus.Text == "pendente" && Permissoes.Pode(Acao.AlterarPrazo);
+            btnCumprir.Enabled = txtStatus.Text == "pendente" && Permissoes.Pode(Acao.CumprirPrazo);
         }
 
         private void btnAlterar_Click(object sender, EventArgs e)
@@ -251,7 +275,7 @@ namespace ERPAdvocacia
                            titulo = @titulo,
                            descricao = @descricao,
                            data_vencimento = @vencimento
-                           WHERE id_prazo = @id";
+                           WHERE id_prazo = @id AND status = 'pendente'";
 
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
 
@@ -262,7 +286,18 @@ namespace ERPAdvocacia
                     cmd.Parameters.AddWithValue("@vencimento", dtpVencimento.Value);
                     cmd.Parameters.AddWithValue("@id", idPrazoSelecionado);
 
-                    cmd.ExecuteNonQuery();
+                    int alterados = cmd.ExecuteNonQuery();
+
+                    if (alterados == 0)
+                    {
+                        Mensagens.Aviso("O prazo não foi alterado. Ele pode ter sido finalizado ou removido. Atualize a seleção.");
+                        LimparCampos();
+                        CarregarDados();
+                        return;
+                    }
+
+                    Auditoria.Registrar("ALTERAR", "PRAZO_PROCESSUAL", idPrazoSelecionado,
+                        "Prazo alterado: " + txtTitulo.Text.Trim());
                 }
 
                 MessageBox.Show("Prazo alterado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -272,7 +307,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao alterar prazo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("alterar prazo", ex);
             }
         }
 
@@ -284,14 +319,7 @@ namespace ERPAdvocacia
                 return;
             }
 
-            DialogResult resposta = MessageBox.Show(
-                "Deseja realmente marcar este prazo como cumprido?",
-                "Confirmação",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            );
-
-            if (resposta == DialogResult.No)
+            if (!Mensagens.Confirmar("Deseja realmente marcar este prazo como cumprido?"))
             {
                 return;
             }
@@ -299,28 +327,39 @@ namespace ERPAdvocacia
             try
             {
                 ConexaoBD db = new ConexaoBD();
-
                 using (MySqlConnection conn = db.CriarConexao())
                 {
                     conn.Open();
+                    using (MySqlCommand cmd = new MySqlCommand("CALL sp_cumprir_prazo(@id, @usuario)", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", idPrazoSelecionado);
+                        cmd.Parameters.AddWithValue("@usuario", SessaoUsuario.IdUsuario);
+                        object? resultado = cmd.ExecuteScalar();
 
-                    string sql = "CALL sp_cumprir_prazo(@id)";
+                        if (resultado == null || resultado == DBNull.Value)
+                        {
+                            throw new InvalidOperationException("A procedure não confirmou o cumprimento.");
+                        }
 
-                    MySqlCommand cmd = new MySqlCommand(sql, conn);
-                    cmd.Parameters.AddWithValue("@id", idPrazoSelecionado);
-
-                    cmd.ExecuteNonQuery();
+                        if (Convert.ToInt32(resultado) != 1)
+                        {
+                            Mensagens.Aviso("O prazo não existe mais ou não está pendente. Atualize a seleção.");
+                            LimparCampos();
+                            CarregarDados();
+                            return;
+                        }
+                    }
                 }
 
-                MessageBox.Show("Prazo cumprido com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
+                Mensagens.Sucesso("Prazo cumprido com sucesso!");
                 CarregarDados();
                 LimparCampos();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao cumprir prazo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("cumprir prazo", ex);
             }
         }
+
     }
 }

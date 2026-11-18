@@ -18,17 +18,19 @@ namespace ERPAdvocacia.Data
         }
         public DataTable ExecutarSelect(string sql)
         {
-            MySqlConnection conn = new MySqlConnection(conexao);
-            conn.Open();
 
-            MySqlCommand cmd = new MySqlCommand(sql, conn);
-            MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+            using (MySqlConnection conn = CriarConexao())
+            {
+                conn.Open();
 
-            DataTable dt = new DataTable();
-            adapter.Fill(dt);
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
 
-            conn.Close();
-            return dt;
+                DataTable dt = new DataTable();
+                adapter.Fill(dt);
+
+                return dt;
+            }
         }
         public DataTable ExecutarSelect(string sql, string pesquisa)
         {
@@ -60,6 +62,84 @@ namespace ERPAdvocacia.Data
                 adapter.Fill(dt);
 
                 return dt;
+            }
+        }
+
+
+
+
+
+
+
+
+        public static MySqlParameter P(string nome, object valor)
+        {
+            MySqlParameter p = new MySqlParameter();
+            p.ParameterName = nome;
+            p.Value = valor ?? DBNull.Value;
+            return p;
+        }
+
+
+        public DataTable ExecutarSelect(string sql, params MySqlParameter[] parametros)
+        {
+            using (MySqlConnection conn = CriarConexao())
+            {
+                conn.Open();
+
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddRange(parametros);
+
+                MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+                DataTable dt = new DataTable();
+                adapter.Fill(dt);
+
+                return dt;
+            }
+        }
+
+
+        public long ExecutarComando(string sql, params MySqlParameter[] parametros)
+        {
+            using (MySqlConnection conn = CriarConexao())
+            {
+                conn.Open();
+
+                MySqlCommand cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddRange(parametros);
+
+                cmd.ExecuteNonQuery();
+
+                return cmd.LastInsertedId;
+            }
+        }
+
+
+
+
+        public decimal? TotalRecebido(int idContrato)
+        {
+            using (MySqlConnection conn = CriarConexao())
+            {
+                conn.Open();
+
+                MySqlCommand cmd = new MySqlCommand("sp_total_recebido_contrato", conn);
+                cmd.CommandType = CommandType.StoredProcedure;
+
+                cmd.Parameters.AddWithValue("p_id_contrato", idContrato);
+
+                MySqlParameter saida = new MySqlParameter("p_total", MySqlDbType.Decimal);
+                saida.Direction = ParameterDirection.Output;
+                cmd.Parameters.Add(saida);
+
+                cmd.ExecuteNonQuery();
+
+                if (saida.Value == null || saida.Value == DBNull.Value)
+                {
+                    return null;
+                }
+
+                return Convert.ToDecimal(saida.Value);
             }
         }
     }

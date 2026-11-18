@@ -1,4 +1,5 @@
-﻿using ERPAdvocacia.Data;
+using ERPAdvocacia.Data;
+using ERPAdvocacia.UI;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar clientes: " + ex.Message);
+                Mensagens.Erro("carregar clientes", ex);
             }
         }
         private int idProcessoSelecionado = 0;
@@ -49,7 +50,7 @@ namespace ERPAdvocacia
 
             dgvProcessos.ClearSelection();
 
-            btnSalvar.Enabled = true;
+            btnSalvar.Enabled = Permissoes.Pode(Acao.CadastrarProcesso);
             btnAlterar.Enabled = false;
             btnIniciar.Enabled = false;
 
@@ -109,13 +110,19 @@ namespace ERPAdvocacia
                 dgvProcessos.Columns["valor_causa"].HeaderText = "Valor da Causa";
 
                 dgvProcessos.Columns["cliente_id"].Visible = false;
-                
-                
+
+                GridHelper.Titulo(dgvProcessos, "vara", "Vara");
+                GridHelper.Titulo(dgvProcessos, "comarca", "Comarca");
+                GridHelper.Titulo(dgvProcessos, "status", "Status");
+                GridHelper.FormatarColuna(dgvProcessos, "data_abertura", "dd/MM/yyyy");
+                GridHelper.Dinheiro(dgvProcessos, "valor_causa");
+                GridHelper.Ocultar(dgvProcessos, "id_processo");
+
                 dgvProcessos.ClearSelection();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar processos: " + ex.Message);
+                Mensagens.Erro("carregar processos", ex);
             }
         }
         public FrmProcessos()
@@ -125,6 +132,12 @@ namespace ERPAdvocacia
 
         private void FrmProcessos_Load(object sender, EventArgs e)
         {
+            txtNumeroCnj.PlaceholderText = "0000000-00.0000.8.13.0000";
+            txtVara.PlaceholderText = "Ex.: 1ª Vara Cível";
+            txtComarca.PlaceholderText = "Ex.: Frutal";
+            txtValorCausa.PlaceholderText = "0,00";
+            txtPesquisar.PlaceholderText = "CNJ, cliente, vara, comarca ou status";
+
             CarregarClientes();
             CarregarDados();
             LimparCampos();
@@ -176,6 +189,9 @@ namespace ERPAdvocacia
                     }
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("CADASTRAR", "PROCESSO", (int)cmd.LastInsertedId,
+                        "Processo cadastrado: " + txtNumeroCnj.Text.Trim());
                 }
 
                 MessageBox.Show("Processo cadastrado com sucesso!", "Cadastro", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -185,7 +201,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao cadastrar processo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("cadastrar processo", ex);
             }
         }
 
@@ -221,10 +237,12 @@ namespace ERPAdvocacia
             }
 
             btnSalvar.Enabled = false;
-            btnAlterar.Enabled = true;
+            btnAlterar.Enabled = Permissoes.Pode(Acao.AlterarProcesso);
+
+
             btnVincularAdvogados.Enabled = true;
 
-            btnIniciar.Enabled = txtStatus.Text == "rascunho";
+            btnIniciar.Enabled = txtStatus.Text == "rascunho" && Permissoes.Pode(Acao.IniciarProcesso);
         }
 
         private void btnAlterar_Click(object sender, EventArgs e)
@@ -271,6 +289,9 @@ namespace ERPAdvocacia
                     }
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("ALTERAR", "PROCESSO", idProcessoSelecionado,
+                        "Processo alterado: " + txtNumeroCnj.Text.Trim());
                 }
 
                 MessageBox.Show("Processo alterado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -280,7 +301,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao alterar processo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("alterar processo", ex);
             }
         }
 
@@ -304,14 +325,7 @@ namespace ERPAdvocacia
                 return;
             }
 
-            DialogResult resposta = MessageBox.Show(
-                "Deseja realmente iniciar este processo?",
-                "Confirmação",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            );
-
-            if (resposta == DialogResult.No)
+            if (!Mensagens.Confirmar("Deseja realmente iniciar este processo?"))
             {
                 return;
             }
@@ -319,30 +333,41 @@ namespace ERPAdvocacia
             try
             {
                 ConexaoBD db = new ConexaoBD();
-
                 using (MySqlConnection conn = db.CriarConexao())
                 {
                     conn.Open();
-
-                    string sql = "CALL sp_iniciar_processo(@id)";
-
-                    MySqlCommand cmd = new MySqlCommand(sql, conn);
-                    cmd.Parameters.AddWithValue("@id", idProcessoSelecionado);
-
-                    object resultado = cmd.ExecuteScalar();
-
-                    if (resultado != null)
+                    using (MySqlCommand cmd = new MySqlCommand("CALL sp_iniciar_processo(@id, @usuario)", conn))
                     {
-                        MessageBox.Show(resultado.ToString(), "Processo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        cmd.Parameters.AddWithValue("@id", idProcessoSelecionado);
+                        cmd.Parameters.AddWithValue("@usuario", SessaoUsuario.IdUsuario);
+                        using (MySqlDataReader resultado = cmd.ExecuteReader())
+                        {
+                            if (!resultado.Read() || resultado.IsDBNull(resultado.GetOrdinal("processos_iniciados")))
+                            {
+                                throw new InvalidOperationException("A procedure não confirmou o resultado.");
+                            }
+
+                            int iniciados = Convert.ToInt32(resultado["processos_iniciados"]);
+                            string mensagem = Convert.ToString(resultado["mensagem"]) ?? "O processo não foi iniciado.";
+
+                            if (iniciados != 1)
+                            {
+                                Mensagens.Aviso(mensagem);
+                                LimparCampos();
+                                CarregarDados();
+                                return;
+                            }
+                        }
                     }
                 }
 
+                Mensagens.Sucesso("Processo iniciado com sucesso.");
                 CarregarDados();
                 LimparCampos();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao iniciar processo: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("iniciar processo", ex);
             }
         }
 

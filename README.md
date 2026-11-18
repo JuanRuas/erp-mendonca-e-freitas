@@ -1,32 +1,40 @@
 # ERP Mendonça e Freitas
 
-Sistema ERP começou a ser desenvolvido como parte da Atividade Extensionista III e vai ser finalizado na Atividade Extensionista IV, para gestão de um escritório de advocacia real (Mendonça e Freitas Advogados e Associados).
+Sistema acadêmico para gestão de escritório de advocacia, desenvolvido em C# com Windows Forms e MySQL.
 
-## 📋 Sobre o Projeto
+## Requisitos
 
-Projeto acadêmico das disciplinas de **Banco de Dados e Programação**, curso de **Sistemas de Informação** — UEMG (Universidade do Estado de Minas Gerais - Unidade Frutal).
+- Windows, .NET 8 com Windows Forms e Visual Studio 2022 com suporte a desktop .NET.
+- MySQL ou MariaDB com InnoDB e suporte às constraints, procedures e triggers dos scripts.
+- NuGet MySqlConnector 2.6.2, declarado no projeto.
+- Cliente SQL que aceite DELIMITER, como MySQL Workbench ou o cliente MySQL.
 
-O sistema tem como objetivo digitalizar e organizar os principais processos operacionais do escritório: cadastro de clientes, controle de processos, gestão de honorários (fixo, êxito e mensal), acompanhamento de prazos e organização documental.
+## Instalação em banco novo
 
-## 👥 Equipe
+**O primeiro script executa DROP DATABASE erp_advocacia e apaga todo banco existente com esse nome.** Use apenas em ambiente onde seja seguro recriá-lo; não execute no banco que contém dados a preservar.
 
-- Antonio Eduardo Salvador Ancheta Borges
-- Denisson Teixeira da Silva Guedes
-- Felipe de Oliveira Martins
-- Gabriel Borba Ambrosio
-- Juan Albert Vilas Boas Ruas Carvalho
+1. Execute Scripts/script_erp_advocacia.sql para criar banco, tabelas e dados de demonstração.
+2. Execute Scripts/script_erp_procedure-trigger.sql na mesma instância para criar as procedures e triggers.
+3. Abra ERPAdvocacia/ERPAdvocacia.sln no Visual Studio. A solução erp-mendonca-e-freitas.slnx na raiz é o projeto histórico.
+4. Ajuste a conexão em ERPAdvocacia/Data/ConexaoBD.cs conforme o MySQL local.
+5. Restaure os pacotes NuGet, compile e execute com F5.
 
-## 🛠️ Tecnologias
+Para um banco existente, faça backup e revise separadamente as diferenças de esquema e objetos antes de atualizá-lo. O primeiro script não serve para atualização preservando dados. O segundo substitui as três procedures e as três triggers existentes com os mesmos nomes; revise dependências antes de aplicá-lo.
 
-- **Linguagem:** C#
-- **Framework:** Windows Forms (.NET)
-- **IDE:** Visual Studio Community
+## Usuários de demonstração
 
-## 🚀 Como rodar o projeto
+Senha: 123456. O usuário inativo não consegue entrar.
 
-1. Clone este repositório:
-git clone https://github.com/JuanRuas/erp-mendonca-e-freitas.git
+| E-mail | Perfil |
+|---|---|
+| antonio@advocacia.com | advogado |
+| denisson@advocacia.com | advogado |
+| felipe@advocacia.com | secretario |
+| gabriel@advocacia.com | estagiario |
+| inativo@advocacia.com | estagiario inativo |
 
-2. Abra o arquivo `erp-mendonca-e-freitas.slnx` no Visual Studio (2022 ou superior).
-3. Aguarde o Visual Studio restaurar as dependências, se houver.
-4. Pressione **F5** para compilar e executar o projeto.
+O advogado gerencia usuários, contratos, vínculos, início de processos e cumprimento de prazos. O secretário realiza cadastros operacionais e registra pagamentos. O estagiário registra movimentações. As permissões completas estão em ERPAdvocacia/Data/Permissoes.cs.
+
+## Limitações
+
+A senha usa SHA-256 sem salt e as contas de demonstração têm senha conhecida; são destinadas apenas a ambiente acadêmico isolado. A conexão padrão usa root local com senha vazia e deve ser ajustada ao ambiente. CPF/CNPJ é validado apenas pelo tamanho. A instalação limpa e os fluxos de integração devem ser testados no ambiente de destino. Evidências anteriores estão em Evidencias/.

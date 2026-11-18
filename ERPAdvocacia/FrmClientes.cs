@@ -1,4 +1,5 @@
 ﻿using ERPAdvocacia.Data;
+using ERPAdvocacia.UI;
 using MySqlConnector;
 using System;
 using System.Collections.Generic;
@@ -23,7 +24,7 @@ namespace ERPAdvocacia
             txtEmail.Clear();
             txtEndereco.Clear();
             dgvClientes.ClearSelection();
-            btnSalvar.Enabled = true;
+            btnSalvar.Enabled = Permissoes.Pode(Acao.CadastrarCliente);
             btnAlterar.Enabled = false;
             btnDesativar.Enabled = false;
             txtNomeRazaoSocial.Focus();
@@ -56,9 +57,41 @@ namespace ERPAdvocacia
                 return false;
             }
 
+            if (!Formato.CpfCnpjTemTamanhoValido(txtCpfCnpj.Text))
+            {
+                MessageBox.Show(
+                    "O CPF deve ter 11 números e o CNPJ deve ter 14 números.",
+                    "Atenção",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+
+                txtCpfCnpj.Focus();
+                return false;
+            }
+
             return true;
         }
         private int idClienteSelecionado = 0;
+
+
+        private void ConfigurarTela()
+        {
+            txtNomeRazaoSocial.PlaceholderText = "Nome completo ou razão social";
+            txtCpfCnpj.PlaceholderText = "Somente números (CPF: 11 / CNPJ: 14)";
+            txtTelefone.PlaceholderText = "(34) 99999-9999";
+            txtEmail.PlaceholderText = "cliente@email.com";
+            txtEndereco.PlaceholderText = "Rua, número, bairro, cidade-UF";
+            txtPesquisar.PlaceholderText = "Nome ou CPF/CNPJ";
+
+
+            txtCpfCnpj.Leave += (s, ev) => txtCpfCnpj.Text = Formato.CpfCnpj(txtCpfCnpj.Text);
+            txtTelefone.Leave += (s, ev) => txtTelefone.Text = Formato.Telefone(txtTelefone.Text);
+
+
+            GridHelper.FormatarCpfCnpj(dgvClientes, "cpf_cnpj");
+        }
+
         public FrmClientes()
         {
             InitializeComponent();
@@ -71,6 +104,7 @@ namespace ERPAdvocacia
 
         private void FrmClientes_Load(object sender, EventArgs e)
         {
+            ConfigurarTela();
             CarregarDados();
             LimparCampos();
         }
@@ -100,13 +134,18 @@ namespace ERPAdvocacia
 
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
 
+
+
                     cmd.Parameters.AddWithValue("@nome", txtNomeRazaoSocial.Text.Trim());
-                    cmd.Parameters.AddWithValue("@cpf", txtCpfCnpj.Text.Trim());
+                    cmd.Parameters.AddWithValue("@cpf", Formato.SomenteDigitos(txtCpfCnpj.Text));
                     cmd.Parameters.AddWithValue("@telefone", txtTelefone.Text.Trim());
                     cmd.Parameters.AddWithValue("@email", txtEmail.Text.Trim());
                     cmd.Parameters.AddWithValue("@endereco", txtEndereco.Text.Trim());
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("CADASTRAR", "CLIENTE", (int)cmd.LastInsertedId,
+                        "Cliente cadastrado: " + txtNomeRazaoSocial.Text.Trim());
                 }
 
                 MessageBox.Show("Cliente cadastrado com sucesso!", "Cadastro", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -116,7 +155,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao cadastrar cliente: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("cadastrar cliente", ex);
             }
         }
         private void CarregarDados()
@@ -131,11 +170,20 @@ namespace ERPAdvocacia
                        ORDER BY nome_razao_social";
 
                 dgvClientes.DataSource = db.ExecutarSelect(sql, txtPesquisar.Text.Trim());
+
+                GridHelper.Ocultar(dgvClientes, "id_cliente");
+                GridHelper.Titulo(dgvClientes, "nome_razao_social", "Nome / Razão Social");
+                GridHelper.Titulo(dgvClientes, "cpf_cnpj", "CPF / CNPJ");
+                GridHelper.Titulo(dgvClientes, "telefone", "Telefone");
+                GridHelper.Titulo(dgvClientes, "email", "E-mail");
+                GridHelper.Titulo(dgvClientes, "endereco", "Endereço");
+                GridHelper.Titulo(dgvClientes, "ativo", "Ativo");
+
                 dgvClientes.ClearSelection();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao carregar clientes: " + ex.Message);
+                Mensagens.Erro("carregar clientes", ex);
             }
         }
 
@@ -151,7 +199,7 @@ namespace ERPAdvocacia
             idClienteSelecionado = Convert.ToInt32(linha.Cells["id_cliente"].Value);
 
             txtNomeRazaoSocial.Text = linha.Cells["nome_razao_social"].Value.ToString();
-            txtCpfCnpj.Text = linha.Cells["cpf_cnpj"].Value.ToString();
+            txtCpfCnpj.Text = Formato.CpfCnpj(linha.Cells["cpf_cnpj"].Value.ToString());
             txtTelefone.Text = linha.Cells["telefone"].Value.ToString();
             txtEmail.Text = linha.Cells["email"].Value.ToString();
             txtEndereco.Text = linha.Cells["endereco"].Value.ToString();
@@ -159,8 +207,8 @@ namespace ERPAdvocacia
             bool ativo = Convert.ToBoolean(linha.Cells["ativo"].Value);
 
             btnSalvar.Enabled = false;
-            btnAlterar.Enabled = ativo;
-            btnDesativar.Enabled = ativo;
+            btnAlterar.Enabled = ativo && Permissoes.Pode(Acao.AlterarCliente);
+            btnDesativar.Enabled = ativo && Permissoes.Pode(Acao.DesativarCliente);
         }
 
         private void btnAlterar_Click(object sender, EventArgs e)
@@ -189,13 +237,16 @@ namespace ERPAdvocacia
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
 
                     cmd.Parameters.AddWithValue("@nome", txtNomeRazaoSocial.Text.Trim());
-                    cmd.Parameters.AddWithValue("@cpf", txtCpfCnpj.Text.Trim());
+                    cmd.Parameters.AddWithValue("@cpf", Formato.SomenteDigitos(txtCpfCnpj.Text));
                     cmd.Parameters.AddWithValue("@telefone", txtTelefone.Text.Trim());
                     cmd.Parameters.AddWithValue("@email", txtEmail.Text.Trim());
                     cmd.Parameters.AddWithValue("@endereco", txtEndereco.Text.Trim());
                     cmd.Parameters.AddWithValue("@id", idClienteSelecionado);
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("ALTERAR", "CLIENTE", idClienteSelecionado,
+                        "Cliente alterado: " + txtNomeRazaoSocial.Text.Trim());
                 }
 
                 MessageBox.Show("Cliente alterado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -205,7 +256,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao alterar cliente: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("alterar cliente", ex);
             }
         }
 
@@ -243,6 +294,9 @@ namespace ERPAdvocacia
                     cmd.Parameters.AddWithValue("@id", idClienteSelecionado);
 
                     cmd.ExecuteNonQuery();
+
+                    Auditoria.Registrar("DESATIVAR", "CLIENTE", idClienteSelecionado,
+                        "Cliente desativado: " + txtNomeRazaoSocial.Text.Trim());
                 }
 
                 MessageBox.Show("Cliente desativado com sucesso!", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -252,7 +306,7 @@ namespace ERPAdvocacia
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao desativar cliente: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Mensagens.Erro("desativar cliente", ex);
             }
         }
 

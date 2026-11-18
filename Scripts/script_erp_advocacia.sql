@@ -10,7 +10,18 @@ CREATE TABLE USUARIO (
     perfil VARCHAR(20) NOT NULL CHECK (perfil IN ('advogado', 'secretario', 'estagiario')),
     oab VARCHAR(20) UNIQUE,
     ativo BOOLEAN NOT NULL DEFAULT TRUE
-);
+) ENGINE=InnoDB;
+
+CREATE TABLE AUDITORIA (
+    id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    acao VARCHAR(50) NOT NULL,
+    entidade VARCHAR(50) NOT NULL,
+    registro_id INT,
+    data_hora DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    detalhes VARCHAR(255),
+    FOREIGN KEY (usuario_id) REFERENCES USUARIO(id_usuario)
+) ENGINE=InnoDB;
 
 CREATE TABLE CLIENTE (
     id_cliente INT AUTO_INCREMENT PRIMARY KEY,
@@ -20,7 +31,7 @@ CREATE TABLE CLIENTE (
     email VARCHAR(150),
     endereco VARCHAR(255),
     ativo BOOLEAN NOT NULL DEFAULT TRUE
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE PROCESSO (
     id_processo INT AUTO_INCREMENT PRIMARY KEY,
@@ -32,7 +43,7 @@ CREATE TABLE PROCESSO (
     data_abertura DATE NOT NULL,
     valor_causa DECIMAL(15,2) CHECK (valor_causa IS NULL OR valor_causa >= 0),
     FOREIGN KEY (cliente_id) REFERENCES CLIENTE(id_cliente) ON DELETE RESTRICT
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE PROCESSO_ADVOGADO (
     processo_id INT NOT NULL,
@@ -41,7 +52,7 @@ CREATE TABLE PROCESSO_ADVOGADO (
     PRIMARY KEY (processo_id, usuario_id),
     FOREIGN KEY (processo_id) REFERENCES PROCESSO(id_processo) ON DELETE CASCADE,
     FOREIGN KEY (usuario_id) REFERENCES USUARIO(id_usuario)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE MOVIMENTACAO (
     id_movimentacao INT AUTO_INCREMENT PRIMARY KEY,
@@ -51,7 +62,7 @@ CREATE TABLE MOVIMENTACAO (
     descricao TEXT NOT NULL,
     FOREIGN KEY (processo_id) REFERENCES PROCESSO(id_processo) ON DELETE CASCADE,
     FOREIGN KEY (usuario_id) REFERENCES USUARIO(id_usuario)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE PRAZO_PROCESSUAL (
     id_prazo INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,7 +75,7 @@ CREATE TABLE PRAZO_PROCESSUAL (
     data_cumprimento DATETIME,
     FOREIGN KEY (processo_id) REFERENCES PROCESSO(id_processo) ON DELETE CASCADE,
     FOREIGN KEY (responsavel_id) REFERENCES USUARIO(id_usuario)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE CONTRATO_HONORARIOS (
     id_contrato INT AUTO_INCREMENT PRIMARY KEY,
@@ -75,7 +86,7 @@ CREATE TABLE CONTRATO_HONORARIOS (
     data_assinatura DATE NOT NULL,
     status VARCHAR(20) NOT NULL CHECK (status IN ('ativo', 'encerrado', 'cancelado')),
     FOREIGN KEY (processo_id) REFERENCES PROCESSO(id_processo)
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE PAGAMENTO (
     id_pagamento INT AUTO_INCREMENT PRIMARY KEY,
@@ -85,16 +96,17 @@ CREATE TABLE PAGAMENTO (
     forma_pagamento VARCHAR(20) NOT NULL CHECK (forma_pagamento IN ('pix', 'dinheiro', 'cartao', 'transferencia', 'outro')),
     observacao VARCHAR(255),
     FOREIGN KEY (contrato_id) REFERENCES CONTRATO_HONORARIOS(id_contrato) ON DELETE RESTRICT
-);
+) ENGINE=InnoDB;
 
 
 
 
 INSERT INTO USUARIO (id_usuario, nome, email, senha_hash, perfil, oab, ativo) VALUES
-(1, 'Antonio Borges', 'antonio@advocacia.com', 'hash1', 'advogado', 'MG123456', TRUE),
-(2, 'Denisson Guedes', 'denisson@advocacia.com', 'hash2', 'advogado', 'MG654321', TRUE),
-(3, 'Felipe Martins', 'felipe@advocacia.com', 'hash3', 'secretario', NULL, TRUE),
-(4, 'Gabriel Ambrosio', 'gabriel@advocacia.com', 'hash4', 'estagiario', NULL, TRUE);
+(1, 'Antonio Borges', 'antonio@advocacia.com', SHA2('123456', 256), 'advogado', 'MG123456', TRUE),
+(2, 'Denisson Guedes', 'denisson@advocacia.com', SHA2('123456', 256), 'advogado', 'MG654321', TRUE),
+(3, 'Felipe Martins', 'felipe@advocacia.com', SHA2('123456', 256), 'secretario', NULL, TRUE),
+(4, 'Gabriel Ambrosio', 'gabriel@advocacia.com', SHA2('123456', 256), 'estagiario', NULL, TRUE),
+(5, 'Usuario Inativo (teste)', 'inativo@advocacia.com', SHA2('123456', 256), 'estagiario', NULL, FALSE);
 
 INSERT INTO CLIENTE (id_cliente, nome_razao_social, cpf_cnpj, telefone, email, endereco, ativo) VALUES
 (1, 'João da Silva', '12345678901', '(34) 99999-1111', 'joao@email.com', 'Rua A, 100, Frutal-MG', TRUE),
@@ -126,4 +138,5 @@ INSERT INTO PAGAMENTO (id_pagamento, contrato_id, valor, data_pagamento, forma_p
 (2, 1, 2500.00, '2026-03-15', 'transferencia', 'Segunda parcela.');
 
 
-SELECT * FROM CLIENTE;
+INSERT INTO PROCESSO (cliente_id,numero_cnj,vara,comarca,status,data_abertura,valor_causa) VALUES
+(1,'0001111-22.2026.8.13.0123','3ª Vara Cível','Frutal','rascunho','2026-09-28',30000.00);
